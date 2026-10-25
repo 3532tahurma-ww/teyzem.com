@@ -1,0 +1,9 @@
+[
+  {
+    "id": "ilk-hikaye",
+    "title": "Teyzemin Kayıp Yüzüğü",
+    "date": "2026-10-25",
+    "tags": ["aile", "kayıp"],
+    "body": "Bu bir örnek hikayedir. Kendi hikayelerini stories.json dosyasına ekleyebilirsin.\n\nParagrafları ayırmak için araya boş satır bırak (JSON içinde \\n\\n yaz)."
+  }
+]
