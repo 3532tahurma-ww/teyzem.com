@@ -129,12 +129,34 @@ function renderStory(id) {
       ${tagLinks(s.tags)}
       <div class="body">${paragraphs(s.body)}</div>
     </article>
+    ${loadConfig().token ? `
+      <div class="actions">
+        <a class="button" href="#/duzenle/${encodeURIComponent(s.id)}">Düzenle</a>
+        <button id="delete" class="button danger" type="button">Sil</button>
+      </div>` : ''}
     <a class="back" href="#/">← Tüm hikayeler</a>
   `;
   window.scrollTo(0, 0);
+
+  document.getElementById('delete')?.addEventListener('click', async e => {
+    if (!confirm(`"${s.title}" silinsin mi?`)) return;
+    e.target.disabled = true;
+    try {
+      stories = await commit(loadConfig(), `Hikaye silindi: ${s.title}`, list => {
+        const i = list.findIndex(x => x.id === s.id);
+        if (i < 0) throw new Error('Hikaye repoda bulunamadı');
+        list.splice(i, 1);
+      });
+      location.hash = '#/';
+      alert('Silindi. Sitede güncellenmesi 1-2 dakika sürebilir.');
+    } catch (err) {
+      alert(err.message);
+      e.target.disabled = false;
+    }
+  });
 }
 
-// --- Add story (writes stories.json via GitHub API) ---
+// --- Add / edit / delete (writes stories.json via GitHub API) ---
 
 function toBase64(str) {
   const bytes = new TextEncoder().encode(str);
@@ -148,7 +170,8 @@ function fromBase64(b64) {
   return new TextDecoder().decode(Uint8Array.from(bin, c => c.charCodeAt(0)));
 }
 
-async function publish(story, cfg) {
+// Reads the latest stories.json from the repo, applies `mutate`, and commits it back.
+async function commit(cfg, message, mutate) {
   const url = `https://api.github.com/repos/${cfg.repo}/contents/stories.json`;
   const headers = { Authorization: `Bearer ${cfg.token}`, Accept: 'application/vnd.github+json' };
 
@@ -157,36 +180,41 @@ async function publish(story, cfg) {
   const file = await res.json();
   const list = JSON.parse(fromBase64(file.content));
 
-  let id = slugify(story.title);
-  for (let i = 2; list.some(s => s.id === id); i++) id = `${slugify(story.title)}-${i}`;
-  story.id = id;
-  list.push(story);
+  mutate(list);
 
   const put = await fetch(url, {
     method: 'PUT',
     headers,
     body: JSON.stringify({
-      message: `Yeni hikaye: ${story.title}`,
+      message,
       content: toBase64(JSON.stringify(list, null, 2) + '\n'),
       sha: file.sha,
       branch: cfg.branch
     })
   });
-  if (!put.ok) throw new Error(`Kaydedilemedi (${put.status})`);
-  return list;
+  if (!put.ok) {
+    const detail = await put.json().then(d => d.message).catch(() => '');
+    throw new Error(`Kaydedilemedi (${put.status})${detail ? ': ' + detail : ''}`);
+  }
+  return list.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-function renderNew() {
-  document.title = 'Yeni hikaye — teyzem.com';
+function renderForm(editId) {
+  const existing = editId ? stories.find(s => s.id === editId) : null;
+  if (editId && !existing) {
+    app.innerHTML = '<p class="muted">Hikaye bulunamadı.</p><a class="back" href="#/">← Tüm hikayeler</a>';
+    return;
+  }
+  document.title = `${existing ? 'Hikayeyi düzenle' : 'Yeni hikaye'} — teyzem.com`;
   const cfg = loadConfig();
-  const today = new Date().toISOString().slice(0, 10);
+  const s = existing || { title: '', date: new Date().toISOString().slice(0, 10), tags: [], body: '' };
   app.innerHTML = `
     <form id="new-story" class="form">
-      <h1>Yeni hikaye</h1>
-      <label>Başlık <input name="title" required></label>
-      <label>Tarih <input name="date" type="date" value="${today}" required></label>
-      <label>Etiketler <input name="tags" placeholder="aile, düğün, komşu"></label>
-      <label>Hikaye <textarea name="body" rows="12" required placeholder="Paragrafları boş satırla ayır."></textarea></label>
+      <h1>${existing ? 'Hikayeyi düzenle' : 'Yeni hikaye'}</h1>
+      <label>Başlık <input name="title" value="${escapeHtml(s.title)}" required></label>
+      <label>Tarih <input name="date" type="date" value="${escapeHtml(s.date)}" required></label>
+      <label>Etiketler <input name="tags" value="${escapeHtml((s.tags || []).join(', '))}" placeholder="aile, düğün, komşu"></label>
+      <label>Hikaye <textarea name="body" rows="12" required placeholder="Paragrafları boş satırla ayır.">${escapeHtml(s.body)}</textarea></label>
 
       <details ${cfg.token ? '' : 'open'}>
         <summary>GitHub ayarları</summary>
@@ -196,10 +224,10 @@ function renderNew() {
         <p class="hint">Fine-grained token: sadece bu repo, <b>Contents: Read and write</b> izni. Yalnızca bu cihazda saklanır.</p>
       </details>
 
-      <button type="submit">Yayınla</button>
+      <button type="submit">${existing ? 'Kaydet' : 'Yayınla'}</button>
       <p id="status" class="status"></p>
     </form>
-    <a class="back" href="#/">← Tüm hikayeler</a>
+    <a class="back" href="${existing ? `#/${encodeURIComponent(existing.id)}` : '#/'}">← Geri</a>
   `;
 
   const form = document.getElementById('new-story');
@@ -211,20 +239,30 @@ function renderNew() {
     saveConfig(newCfg);
     updateFooter();
 
-    const story = {
-      id: '',
+    const data = {
       title: f.get('title').trim(),
       date: f.get('date'),
       tags: parseTags(f.get('tags')),
       body: f.get('body').trim()
     };
+    let id = existing ? existing.id : '';
 
     const button = form.querySelector('button');
     button.disabled = true;
-    status.textContent = 'Yayınlanıyor…';
+    status.textContent = 'Kaydediliyor…';
     try {
-      stories = (await publish(story, newCfg)).sort((a, b) => b.date.localeCompare(a.date));
-      location.hash = `#/${encodeURIComponent(story.id)}`;
+      stories = existing
+        ? await commit(newCfg, `Hikaye düzenlendi: ${data.title}`, list => {
+            const i = list.findIndex(x => x.id === id);
+            if (i < 0) throw new Error('Hikaye repoda bulunamadı');
+            list[i] = { ...list[i], ...data };
+          })
+        : await commit(newCfg, `Yeni hikaye: ${data.title}`, list => {
+            id = slugify(data.title);
+            for (let i = 2; list.some(x => x.id === id); i++) id = `${slugify(data.title)}-${i}`;
+            list.push({ id, ...data });
+          });
+      location.hash = `#/${encodeURIComponent(id)}`;
       alert('Kaydedildi. Sitede görünmesi 1-2 dakika sürebilir.');
     } catch (err) {
       status.textContent = err.message;
@@ -237,7 +275,8 @@ function renderNew() {
 
 function route() {
   const path = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
-  if (path === 'yeni') return renderNew();
+  if (path === 'yeni') return renderForm();
+  if (path.startsWith('duzenle/')) return renderForm(path.slice(8));
   if (path.startsWith('etiket/')) return renderList(path.slice(7));
   path ? renderStory(path) : renderList();
 }

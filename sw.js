@@ -1,4 +1,4 @@
-const CACHE = 'teyzem-v2';
+const CACHE = 'teyzem-v3';
 const ASSETS = ['./', 'index.html', 'style.css', 'app.js', 'stories.json', 'manifest.json', 'icon.svg'];
 
 self.addEventListener('install', e => {

@@ -172,6 +172,28 @@ a:hover { text-decoration: underline; }
 }
 .form button:disabled { opacity: 0.6; cursor: wait; }
 
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+.button {
+  display: inline-block;
+  padding: 8px 18px;
+  font: inherit;
+  font-family: system-ui, sans-serif;
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: transparent;
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  cursor: pointer;
+}
+.button:hover { text-decoration: none; background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.button.danger { color: #dc2626; border-color: #dc2626; }
+.button.danger:hover { background: color-mix(in srgb, #dc2626 10%, transparent); }
+.button:disabled { opacity: 0.6; cursor: wait; }
+
 .hint, .status {
   font-size: 0.85rem;
   color: var(--muted);
