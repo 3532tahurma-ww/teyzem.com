@@ -58,6 +58,17 @@ a:hover { text-decoration: underline; }
   font-style: italic;
 }
 
+.header-bar {
+  margin: 16px 0 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-family: system-ui, sans-serif;
+}
+
 .story-card {
   background: var(--card);
   border: 1px solid var(--border);

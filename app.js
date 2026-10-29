@@ -98,6 +98,10 @@ function drawList(tag) {
   `).join('');
 }
 
+function updateCount() {
+  document.getElementById('count').textContent = `Toplam ${stories.length} hikaye`;
+}
+
 function renderList(tag) {
   document.title = tag ? `#${tag} — teyzem.com` : DEFAULT_TITLE;
   app.innerHTML = `
@@ -274,6 +278,7 @@ function renderForm(editId) {
 // --- Router ---
 
 function route() {
+  updateCount();
   const path = decodeURIComponent(location.hash.replace(/^#\/?/, ''));
   if (path === 'yeni') return renderForm();
   if (path.startsWith('duzenle/')) return renderForm(path.slice(8));
